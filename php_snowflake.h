@@ -49,7 +49,7 @@ ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
 #ifdef ZTS
-#define SF_G(v) TSRMG(sf_globals_id, zend_sf_globals *, v)
+#define SF_G(v) TSRMG(snowflake_globals_id, zend_snowflake_globals *, v)
 #else
 #define SF_G(v) (snowflake_globals.v)
 #endif
