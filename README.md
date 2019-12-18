@@ -1,6 +1,6 @@
-# php-ext-arraylist
+# php-ext-snowflake
 
-[![Build Status](https://travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://github.com/twitter-archive/snowflake)
+[![Build Status](https://travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake)
 
 [Twitter SnowFlake](https://github.com/twitter-archive/snowflake, "Twitter SnowFlake") PHP扩展
 
@@ -8,7 +8,7 @@
 php-5.0 +
 
 ## Install
-# Compile ArrayList in Linux mac
+# Compile snowflake in Linux mac
 
 ```shell
 phpize
