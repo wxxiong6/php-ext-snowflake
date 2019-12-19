@@ -12,7 +12,7 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:                                                              |
+  | Author: wxxiong6@gmail.com                                           |
   +----------------------------------------------------------------------+
 */
 
@@ -42,7 +42,7 @@ extern zend_module_entry snowflake_module_entry;
    You are encouraged to rename these macros something shorter, see
    examples in any other php module directory.
 */
-// #define SNOWFLAKE_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(snowflake, v)
+// #define SF_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(snowflake, v)
 
 #if defined(ZTS) && defined(COMPILE_DL_SNOWFLAKE)
 ZEND_TSRMLS_CACHE_EXTERN()
@@ -58,7 +58,7 @@ ZEND_TSRMLS_CACHE_EXTERN()
 	and END macros here:
 */
 ZEND_BEGIN_MODULE_GLOBALS(snowflake)
-	zend_long  worker_id;
+	zend_long worker_id;
   zend_long region_id;
   zend_long epoch;
   zend_long region_bits;

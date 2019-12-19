@@ -81,8 +81,8 @@ static zend_long snowflake_id(snowflake *sf)
     } else {
         php_error_docref(NULL, E_WARNING, "epoch in the range of 0, %ld",millisecs);
     }
-
-    id = ((millisecs-SF_G(sequence_bits)) << sf->time_bits) 
+ 
+    id = ((millisecs-SF_G(epoch)) << sf->time_bits) 
             | (sf->region_id << sf->region_bits) 
             | (sf->worker_id << sf->worker_bits) 
             | (sf->seq); 
