@@ -38,56 +38,56 @@ extern zend_module_entry snowflake_module_entry;
 #include "TSRM.h"
 #endif
 
-/* Always refer to the globals in your function as SNOWFLAKE_G(variable).
-   You are encouraged to rename these macros something shorter, see
-   examples in any other php module directory.
-*/
-// #define SF_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(snowflake, v)
 
-#if defined(ZTS) && defined(COMPILE_DL_SNOWFLAKE)
-ZEND_TSRMLS_CACHE_EXTERN()
-#endif
-
-#ifdef ZTS
-#define SF_G(v) TSRMG(snowflake_globals_id, zend_snowflake_globals *, v)
-#else
-#define SF_G(v) (snowflake_globals.v)
+#if PHP_MAJOR_VERSION < 7
+typedef int64_t zend_long;
 #endif
 /*
   	Declare any global variables you may need between the BEGIN
 	and END macros here:
 */
 ZEND_BEGIN_MODULE_GLOBALS(snowflake)
-	zend_long worker_id;
-  zend_long region_id;
+	int worker_id;
+  int region_id;
+  int region_bits;
+  int worker_bits;
+  int sequence_bits;
+  int time_bits;
   zend_long epoch;
-  zend_long region_bits;
-  zend_long worker_bits;
-  zend_long sequence_bits;
-  zend_long time_bits;
 ZEND_END_MODULE_GLOBALS(snowflake)
 
-#define SNOWFLAKE_WORKER_ID "1"
-#define SNOWFLAKE_REGION_ID "1"
-#define SNOWFLAKE_EPOCH "1576080000000" //2019-12-12
-#define SNOWFLAKE_TIME_BITS "41"
-#define SNOWFLAKE_REGIONID_BITS "4"
-#define SNOWFLAKE_WORKERID_BITS "10"
-#define SNOWFLAKE_SEQUENCE_BITS "8"
+ZEND_DECLARE_MODULE_GLOBALS(snowflake)
+
+#define SF_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(snowflake, v)
+
+#if defined(ZTS) && defined(COMPILE_DL_SNOWFLAKE)
+ZEND_TSRMLS_CACHE_EXTERN()
+#endif
+
+#define SNOWFLAKE_WORKER_ID 1
+#define SNOWFLAKE_REGION_ID 1
+#define SNOWFLAKE_EPOCH 1576080000000 //2019-12-12
+#define SNOWFLAKE_TIME_BITS 41
+#define SNOWFLAKE_REGIONID_BITS 4
+#define SNOWFLAKE_WORKERID_BITS 10
+#define SNOWFLAKE_SEQUENCE_BITS 8
+
 typedef struct _snowflake_state  snowflake;
+
 struct _snowflake_state {
     zend_long time;
-    zend_long seq_max;
-    zend_long worker_id;
-    zend_long region_id;
-    zend_long seq;
-    zend_long time_bits;
-    zend_long region_bits;
-    zend_long worker_bits;
+    zend_long epoch;
+    int seq_max;
+    int worker_id;
+    int region_id;
+    int seq;
+    int time_bits;
+    int region_bits;
+    int worker_bits;
 };
 
 static zend_long snowflake_id(snowflake *);
-static int snowflake_init(int region_id, int worker_id, snowflake *);
+static int snowflake_init(snowflake *);
 
 
 #endif	/* PHP_SNOWFLAKE_H */
