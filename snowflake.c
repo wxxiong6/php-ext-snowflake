@@ -35,7 +35,7 @@ static int le_snowflake;
 static snowflake sf;
 zend_class_entry *snowflake_ce;
 /* {{{ PHP_INI
- */
+ 
 
 PHP_INI_BEGIN()
     // STD_PHP_INI_ENTRY("snowflake.worker_id",     SNOWFLAKE_WORKER_ID,     PHP_INI_SYSTEM, OnUpdateLongGEZero, worker_id,     zend_snowflake_globals, snowflake_globals)
@@ -47,7 +47,7 @@ PHP_INI_BEGIN()
 	// STD_PHP_INI_ENTRY("snowflake.sequence_bits", SNOWFLAKE_SEQUENCE_BITS, PHP_INI_SYSTEM, OnUpdateLongGEZero, sequence_bits, zend_snowflake_globals, snowflake_globals)
 	// STD_PHP_INI_ENTRY("snowflake.time_bits",     SNOWFLAKE_TIME_BITS,     PHP_INI_SYSTEM, OnUpdateLongGEZero, time_bits,     zend_snowflake_globals, snowflake_globals)
 PHP_INI_END()
-
+ */
 /* }}} */
 
 static inline zend_long timestamp_gen()
@@ -75,7 +75,7 @@ static zend_long snowflake_id(snowflake *sf)
     } else if (millisecs > sf->time) {
         sf->seq = 1;
     } else {
-        php_error_docref(NULL, E_WARNING, "epoch in the range of 0, %ld", millisecs);
+        php_error_docref(NULL, E_WARNING, "epoch in the range of 0, %lld", millisecs);
     }
  
     id = ((millisecs-sf->epoch) << sf->time_bits) 
@@ -157,7 +157,7 @@ PHP_METHOD(snowflake, getId)
  */
 PHP_MSHUTDOWN_FUNCTION(snowflake)
 {
-	UNREGISTER_INI_ENTRIES();	
+	/*UNREGISTER_INI_ENTRIES();	*/
 	return SUCCESS;
 }
 /* }}} */
@@ -167,8 +167,10 @@ PHP_MSHUTDOWN_FUNCTION(snowflake)
  */
 PHP_RINIT_FUNCTION(snowflake)
 {
+#if PHP_MAJOR_VERSION == 7
 #if defined(COMPILE_DL_SNOWFLAKE) && defined(ZTS)
 	ZEND_TSRMLS_CACHE_UPDATE();
+#endif
 #endif
 	return SUCCESS;
 }
@@ -228,7 +230,7 @@ static const zend_function_entry snowflake_methods[] = {
 PHP_MINIT_FUNCTION(snowflake)
 {
 	zend_class_entry ce;
-	REGISTER_INI_ENTRIES();
+	/* REGISTER_INI_ENTRIES(); */
 	INIT_CLASS_ENTRY(ce, "snowflake", snowflake_methods); //注册类及类方法
 
 	snowflake_ce = zend_register_internal_class(&ce);
@@ -255,8 +257,10 @@ zend_module_entry snowflake_module_entry = {
 /* }}} */
 
 #ifdef COMPILE_DL_SNOWFLAKE
+#if PHP_MAJOR_VERSION == 7
 #ifdef ZTS
 ZEND_TSRMLS_CACHE_DEFINE()
+#endif
 #endif
 ZEND_GET_MODULE(snowflake)
 #endif

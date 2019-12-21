@@ -60,8 +60,10 @@ ZEND_DECLARE_MODULE_GLOBALS(snowflake)
 
 #define SF_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(snowflake, v)
 
+#if PHP_MAJOR_VERSION == 7
 #if defined(ZTS) && defined(COMPILE_DL_SNOWFLAKE)
 ZEND_TSRMLS_CACHE_EXTERN()
+#endif
 #endif
 
 #define SNOWFLAKE_WORKER_ID 1

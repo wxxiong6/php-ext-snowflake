@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake)
 
-[Twitter SnowFlake](https://github.com/twitter-archive/snowflake, "Twitter SnowFlake") PHP扩展
+[Twitter SnowFlake](https://github.com/twitter-archive/snowflake, "Twitter SnowFlake") PHP Extension
 
 ## Requirement
 php-5.0 +
@@ -20,5 +20,5 @@ make install
 ## Document
 ```php
 snowflake::getId();
-//6613061356910543118
+//3373092110074113
 ```
