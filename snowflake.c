@@ -75,7 +75,7 @@ static zend_long snowflake_id(snowflake *sf)
     } else if (millisecs > sf->time) {
         sf->seq = 1;
     } else {
-        php_error_docref(NULL, E_WARNING, "epoch in the range of 0, %lld", millisecs);
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "epoch in the range of 0, %lld", millisecs);
     }
  
     id = ((millisecs-sf->epoch) << sf->time_bits) 
@@ -94,13 +94,13 @@ static int snowflake_init(snowflake *sf)
     int region_id = SNOWFLAKE_REGION_ID;
     int max_region_id = (1 << SNOWFLAKE_REGIONID_BITS) - 1;
     if(region_id < 0 || region_id > max_region_id){
-		php_error_docref(NULL, E_WARNING, "Region ID must be in the range : 0-%d", max_region_id);
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Region ID must be in the range : 0-%d", max_region_id);
         return -1;
     }
     int worker_id = SNOWFLAKE_WORKER_ID;
     int max_worker_id = (1 << SNOWFLAKE_WORKERID_BITS) - 1;
     if(worker_id < 0 || worker_id > max_worker_id){
-		php_error_docref(NULL, E_WARNING, "Worker ID must be in the range: 0-%d", max_worker_id);
+		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Worker ID must be in the range: 0-%d", max_worker_id);
         return -1;
     }
 
@@ -233,8 +233,14 @@ PHP_MINIT_FUNCTION(snowflake)
 	/* REGISTER_INI_ENTRIES(); */
 	INIT_CLASS_ENTRY(ce, "snowflake", snowflake_methods); //注册类及类方法
 
-	snowflake_ce = zend_register_internal_class(&ce);
-	snowflake_init(&sf);
+
+ #if PHP_MAJOR_VERSION < 7
+    snowflake_ce = zend_register_internal_class(&ce TSRMLS_CC);
+ #else
+    snowflake_ce = zend_register_internal_class(&ce);
+#endif
+
+    snowflake_init(&sf);
 
 	return SUCCESS;
 }
