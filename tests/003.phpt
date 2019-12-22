@@ -10,7 +10,7 @@ for ($i = 0; $i < $max; $i++) {
 	$arr[$i] = snowflake::getId();
 }
 
-var_dump(($arr[$max-1] - $arr[0]) > 0);
+var_dump(($arr[$max-1] - $arr[0]) == ($max-1));
 ?>
 --EXPECT--
 bool(true)

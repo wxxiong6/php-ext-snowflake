@@ -6,7 +6,7 @@ if(!extension_loaded('snowflake')) {
 }
 ini_set("snowflake.worker_id", 3);
 $arr = [];
-$max = 1;
+$max = 100;
 for ($i = 0; $i < $max; $i++) {
 	$arr[$i] = snowflake::getId();
 	var_dump($arr[$i]);

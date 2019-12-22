@@ -59,6 +59,7 @@ static inline zend_long timestamp_gen()
 
 static zend_long snowflake_id(snowflake *sf) 
 {
+    TSRMLS_FETCH();
     zend_long millisecs = timestamp_gen();
     zend_long id = 0LL;
 
@@ -91,6 +92,7 @@ static zend_long snowflake_id(snowflake *sf)
 
 static int snowflake_init(snowflake *sf) 
 {
+    TSRMLS_FETCH();
     int region_id = SNOWFLAKE_REGION_ID;
     int max_region_id = (1 << SNOWFLAKE_REGIONID_BITS) - 1;
     if(region_id < 0 || region_id > max_region_id){
