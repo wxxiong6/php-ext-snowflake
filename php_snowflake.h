@@ -38,10 +38,20 @@ extern zend_module_entry snowflake_module_entry;
 #include "TSRM.h"
 #endif
 
+typedef struct _snowflake_state  snowflake;
 
 #if PHP_MAJOR_VERSION < 7
 typedef int64_t zend_long;
+#else
+#ifdef ZTS
+#define SNOWFLAKE_LOCK(sf) tsrm_mutex_lock((sf)->LOCK_access)
+#define SNOWFLAKE_UNLOCK(sf) tsrm_mutex_unlock((sf)->LOCK_access)
+#else
+#define SNOWFLAKE_LOCK(sf)
+#define SNOWFLAKE_UNLOCK(sf)
 #endif
+#endif
+
 /*
   	Declare any global variables you may need between the BEGIN
 	and END macros here:
@@ -74,10 +84,10 @@ ZEND_TSRMLS_CACHE_EXTERN()
 #define SNOWFLAKE_WORKERID_BITS 10
 #define SNOWFLAKE_SEQUENCE_BITS 8
 
-typedef struct _snowflake_state  snowflake;
+
 
 struct _snowflake_state {
-    zend_long time;
+    zend_long last_time;
     zend_long epoch;
     int seq_max;
     int worker_id;
@@ -86,10 +96,13 @@ struct _snowflake_state {
     int time_bits;
     int region_bits;
     int worker_bits;
+#ifdef ZTS
+	MUTEX_T	LOCK_access;
+#endif
 };
 
 static zend_long snowflake_id(snowflake *);
-static int snowflake_init(snowflake *);
+static int snowflake_init(snowflake **);
 
 
 #endif	/* PHP_SNOWFLAKE_H */
