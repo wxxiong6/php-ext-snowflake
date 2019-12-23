@@ -125,7 +125,7 @@ static int snowflake_init(snowflake **sf)
     (*sf)->seq_max      = (1 << SNOWFLAKE_SEQUENCE_BITS) - 1;
     (*sf)->seq          = 0;
     (*sf)->last_time    = 0;
-#ifdef ZTS
+#if defined(ZTS) &&  PHP_MAJOR_VERSION == 7
 	(*sf)->LOCK_access = tsrm_mutex_alloc();
 #endif
     return SUCCESS;
@@ -167,7 +167,7 @@ PHP_MSHUTDOWN_FUNCTION(snowflake)
 {
 	/*UNREGISTER_INI_ENTRIES();	*/
 
-#ifdef ZTS
+#if defined(ZTS) &&  PHP_MAJOR_VERSION == 7
 	tsrm_mutex_free(sf->LOCK_access);
 #endif
     // efree(sf);

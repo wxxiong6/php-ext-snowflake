@@ -42,6 +42,8 @@ typedef struct _snowflake_state  snowflake;
 
 #if PHP_MAJOR_VERSION < 7
 typedef int64_t zend_long;
+#define SNOWFLAKE_LOCK(sf)
+#define SNOWFLAKE_UNLOCK(sf)
 #else
 #ifdef ZTS
 #define SNOWFLAKE_LOCK(sf) tsrm_mutex_lock((sf)->LOCK_access)
@@ -96,7 +98,7 @@ struct _snowflake_state {
     int time_bits;
     int region_bits;
     int worker_bits;
-#ifdef ZTS
+#if defined(ZTS) &&  PHP_MAJOR_VERSION == 7
 	MUTEX_T	LOCK_access;
 #endif
 };
