@@ -5,7 +5,7 @@
 [Twitter SnowFlake](https://github.com/twitter-archive/snowflake, "Twitter SnowFlake") PHP Extension
 
 ## Requirement
-php-5.0 +
+php-5.5 +
 
 ## Install
 # Compile snowflake in Linux mac
