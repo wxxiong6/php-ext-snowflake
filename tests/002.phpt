@@ -5,10 +5,12 @@ Check for snowflake unique
 --FILE--
 <?php
 $arr = [];
-for ($i = 0; $i < 100; $i++) {
-	$arr[$i] = snowflake::getId();
+$max = 100000;
+for ($i = 0; $i < $max; $i++) {
+	$id = snowflake::getId();
+	$arr[$id] = '';
 }
-var_dump(count(array_unique($arr)));
+var_dump(count($arr));
 ?>
 --EXPECT--
-int(100)
+int(100000)

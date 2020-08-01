@@ -24,7 +24,7 @@
 extern zend_module_entry snowflake_module_entry;
 #define phpext_snowflake_ptr &snowflake_module_entry
 
-#define PHP_SNOWFLAKE_VERSION "0.1.0" /* Replace with version number for your extension */
+#define PHP_SNOWFLAKE_VERSION "1.0.0" /* Replace with version number for your extension */
 
 #ifdef PHP_WIN32
 #	define PHP_SNOWFLAKE_API __declspec(dllexport)
@@ -82,16 +82,16 @@ ZEND_TSRMLS_CACHE_EXTERN()
 #define SNOWFLAKE_REGION_ID 1
 #define SNOWFLAKE_EPOCH 1576080000000 //2019-12-12
 #define SNOWFLAKE_TIME_BITS 41
-#define SNOWFLAKE_REGIONID_BITS 4
-#define SNOWFLAKE_WORKERID_BITS 10
-#define SNOWFLAKE_SEQUENCE_BITS 8
+#define SNOWFLAKE_REGIONID_BITS 5
+#define SNOWFLAKE_WORKERID_BITS 5
+#define SNOWFLAKE_SEQUENCE_BITS 12
 
 
 
 struct _snowflake_state {
     zend_long last_time;
     zend_long epoch;
-    int seq_max;
+    int seq_mask;
     int worker_id;
     int region_id;
     int seq;

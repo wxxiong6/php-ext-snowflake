@@ -5,7 +5,7 @@ Check for snowflake serial
 --FILE--
 <?php
 $arr = [];
-$max = 100;
+$max = 1024;
 for ($i = 0; $i < $max; $i++) {
 	$arr[$i] = snowflake::getId();
 }
