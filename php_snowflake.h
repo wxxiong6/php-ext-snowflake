@@ -40,26 +40,8 @@ extern zend_module_entry snowflake_module_entry;
 
 typedef struct _snowflake_state  snowflake;
 
-#if PHP_MAJOR_VERSION < 7
-typedef int64_t zend_long;
-#define SNOWFLAKE_LOCK(sf)
-#define SNOWFLAKE_UNLOCK(sf)
-#else
-#ifdef ZTS
-#define SNOWFLAKE_LOCK(sf) tsrm_mutex_lock((sf)->LOCK_access)
-#define SNOWFLAKE_UNLOCK(sf) tsrm_mutex_unlock((sf)->LOCK_access)
-#else
-#define SNOWFLAKE_LOCK(sf)
-#define SNOWFLAKE_UNLOCK(sf)
-#endif
-#endif
-
-/*
-  	Declare any global variables you may need between the BEGIN
-	and END macros here:
-*/
 ZEND_BEGIN_MODULE_GLOBALS(snowflake)
-	int worker_id;
+  int worker_id;
   int region_id;
   int region_bits;
   int worker_bits;
@@ -72,11 +54,11 @@ ZEND_DECLARE_MODULE_GLOBALS(snowflake)
 
 #define SF_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(snowflake, v)
 
-#if PHP_MAJOR_VERSION == 7
+
 #if defined(ZTS) && defined(COMPILE_DL_SNOWFLAKE)
 ZEND_TSRMLS_CACHE_EXTERN()
 #endif
-#endif
+
 
 #define SNOWFLAKE_WORKER_ID 1
 #define SNOWFLAKE_REGION_ID 1
@@ -98,9 +80,6 @@ struct _snowflake_state {
     int time_bits;
     int region_bits;
     int worker_bits;
-#if defined(ZTS) &&  PHP_MAJOR_VERSION == 7
-	MUTEX_T	LOCK_access;
-#endif
 };
 
 static zend_long snowflake_id(snowflake *);

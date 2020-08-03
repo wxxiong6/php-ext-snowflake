@@ -13,7 +13,7 @@
 
 
 ## Requirement
-php-5.5 +
+php-7.0 +
 
 ## Install
 # Compile snowflake in Linux mac

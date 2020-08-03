@@ -34,7 +34,8 @@ static int le_snowflake;
 static snowflake snowf;
 static snowflake *sf = &snowf;
 
-zend_class_entry *snowflake_ce;
+zend_class_entry snowflake_ce;
+
 /* {{{ PHP_INI  */
  
 
@@ -59,8 +60,6 @@ static inline zend_long timestamp_gen()
 
 static zend_long snowflake_id(snowflake *sf) 
 {
-    TSRMLS_FETCH();
-    SNOWFLAKE_LOCK(sf);
     zend_long millisecs = timestamp_gen();
     zend_long id = 0LL;
 
@@ -87,14 +86,11 @@ static zend_long snowflake_id(snowflake *sf)
 
 
     sf->last_time = millisecs;
-    SNOWFLAKE_UNLOCK(sf);
     return id;
 }
 
 static int snowflake_init(snowflake **sf) 
 {
-    
-    TSRMLS_FETCH();
     int region_id = SF_G(region_id);
     int max_region_id = (-1L << SF_G(region_bits)) ^ -1L;
     if(region_id < 0 || region_id > max_region_id){
@@ -118,9 +114,6 @@ static int snowflake_init(snowflake **sf)
     (*sf)->seq_mask      = (-1L << SF_G(sequence_bits)) ^ -1L;
     (*sf)->seq          = 0;
     (*sf)->last_time    = 0;
-#if defined(ZTS) &&  PHP_MAJOR_VERSION == 7
-	(*sf)->LOCK_access = tsrm_mutex_alloc();
-#endif
     return SUCCESS;
 }
 
@@ -159,11 +152,6 @@ PHP_METHOD(snowflake, getId)
 PHP_MSHUTDOWN_FUNCTION(snowflake)
 {
 	UNREGISTER_INI_ENTRIES();
-
-#if defined(ZTS) &&  PHP_MAJOR_VERSION == 7
-	tsrm_mutex_free(sf->LOCK_access);
-#endif
-    // efree(sf);
 	return SUCCESS;
 }
 /* }}} */
@@ -173,11 +161,11 @@ PHP_MSHUTDOWN_FUNCTION(snowflake)
  */
 PHP_RINIT_FUNCTION(snowflake)
 {
-#if PHP_MAJOR_VERSION == 7
+
 #if defined(COMPILE_DL_SNOWFLAKE) && defined(ZTS)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
-#endif
+	snowflake_init(&sf);
 	return SUCCESS;
 }
 /* }}} */
@@ -236,19 +224,11 @@ static const zend_function_entry snowflake_methods[] = {
  */
 PHP_MINIT_FUNCTION(snowflake)
 {
-	zend_class_entry ce;
+    ZEND_INIT_MODULE_GLOBALS(snowflake, php_snowflake_init_globals, NULL);
+	INIT_CLASS_ENTRY(snowflake_ce, "snowflake", snowflake_methods); //注册类及类方法
 	REGISTER_INI_ENTRIES();
-	INIT_CLASS_ENTRY(ce, "snowflake", snowflake_methods); //注册类及类方法
-
-
-#if PHP_MAJOR_VERSION < 7
-    snowflake_ce = zend_register_internal_class(&ce TSRMLS_CC);
-#else
-    snowflake_ce = zend_register_internal_class(&ce);
-#endif
-
-    snowflake_init(&sf);
-
+    zend_register_internal_class(&snowflake_ce);
+	
 	return SUCCESS;
 }
 /* }}} */
@@ -270,10 +250,8 @@ zend_module_entry snowflake_module_entry = {
 /* }}} */
 
 #ifdef COMPILE_DL_SNOWFLAKE
-#if PHP_MAJOR_VERSION == 7
 #ifdef ZTS
 ZEND_TSRMLS_CACHE_DEFINE()
-#endif
 #endif
 ZEND_GET_MODULE(snowflake)
 #endif
