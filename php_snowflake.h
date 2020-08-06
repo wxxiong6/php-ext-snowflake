@@ -41,13 +41,13 @@ extern zend_module_entry snowflake_module_entry;
 typedef struct _snowflake_state  snowflake;
 
 ZEND_BEGIN_MODULE_GLOBALS(snowflake)
-  int worker_id;
-  int region_id;
-  int region_bits;
-  int worker_bits;
-  int sequence_bits;
-  int time_bits;
-  zend_long epoch;
+  uint8_t region_id;
+  uint8_t worker_id;
+  uint8_t time_bits;
+  uint8_t region_bits;
+  uint8_t worker_bits;
+  uint8_t sequence_bits;
+  uint64_t epoch;
 ZEND_END_MODULE_GLOBALS(snowflake)
 
 ZEND_DECLARE_MODULE_GLOBALS(snowflake)
@@ -59,30 +59,16 @@ ZEND_DECLARE_MODULE_GLOBALS(snowflake)
 ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
-
-#define SNOWFLAKE_WORKER_ID 1
-#define SNOWFLAKE_REGION_ID 1
-#define SNOWFLAKE_EPOCH 1576080000000 //2019-12-12
-#define SNOWFLAKE_TIME_BITS 41
-#define SNOWFLAKE_REGIONID_BITS 5
-#define SNOWFLAKE_WORKERID_BITS 5
-#define SNOWFLAKE_SEQUENCE_BITS 12
-
-
-
 struct _snowflake_state {
-    zend_long last_time;
-    zend_long epoch;
-    int seq_mask;
-    int worker_id;
-    int region_id;
-    int seq;
-    int time_bits;
-    int region_bits;
-    int worker_bits;
+    uint8_t time_shift;
+    uint8_t region_shift;
+    uint8_t worker_shift;
+    uint64_t last_time;
+    uint32_t seq_mask;
+    uint32_t seq;
 };
 
-static zend_long snowflake_id(snowflake *);
+static uint64_t snowflake_id(snowflake *);
 static int snowflake_init(snowflake **);
 
 

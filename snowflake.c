@@ -27,13 +27,17 @@
 #include "ext/standard/info.h"
 #include "php_snowflake.h"
 #include <sys/time.h>
+#include <sched.h>
 
+static uint8_t ncpu = 1;
+static uint8_t lock = 0;
+static uint32_t pid = 0;
 
 /* True global resources - no need for thread safety here */
 static int le_snowflake;
 static snowflake snowf;
 static snowflake *sf = &snowf;
-
+static unsigned int spin = 2048;
 zend_class_entry snowflake_ce;
 
 /* {{{ PHP_INI  */
@@ -42,6 +46,7 @@ zend_class_entry snowflake_ce;
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("snowflake.worker_id",     "1",     PHP_INI_SYSTEM, OnUpdateLongGEZero, worker_id,     zend_snowflake_globals, snowflake_globals)
     STD_PHP_INI_ENTRY("snowflake.region_id",     "1",     PHP_INI_SYSTEM, OnUpdateLongGEZero, region_id,     zend_snowflake_globals, snowflake_globals)
+    //1576080000000 2019-12-12
 	STD_PHP_INI_ENTRY("snowflake.epoch",         "1576080000000",         PHP_INI_SYSTEM, OnUpdateLongGEZero, epoch,         zend_snowflake_globals, snowflake_globals)
 	STD_PHP_INI_ENTRY("snowflake.time_bits",     "41",     PHP_INI_SYSTEM, OnUpdateLongGEZero, time_bits,     zend_snowflake_globals, snowflake_globals)
     STD_PHP_INI_ENTRY("snowflake.region_bits",   "5",      PHP_INI_SYSTEM, OnUpdateLongGEZero, region_bits,   zend_snowflake_globals, snowflake_globals)
@@ -51,6 +56,32 @@ PHP_INI_END()
 
 /* }}} */
 
+void spinlock(uint8_t *lock, uint32_t pid, uint32_t spin)
+{
+    uint32_t  i, n;
+    for ( ;; ) {
+        if (*lock == 0 && __sync_bool_compare_and_swap(lock, 0, pid)) {
+            return;
+        }
+        if (ncpu > 1) { // ncpu CPU个数
+            for (n = 1; n < spin; n <<= 1) {
+                for (i = 0; i < n; i++) {
+                     __asm__ __volatile__ ("pause");
+                }
+                if (*lock == 0 && __sync_bool_compare_and_swap(lock, 0, pid)) {
+                    return;
+                }
+            }
+        }
+		sched_yield(); // 只旋一个周期，没有获取到锁，退出CPU控制权
+    }
+}
+
+void spinlock_unlock(uint8_t *lock, int pid)
+{
+    __sync_bool_compare_and_swap(lock, pid, 0);
+}
+
 static inline zend_long timestamp_gen()
 {
     struct  timeval    tv;
@@ -58,62 +89,58 @@ static inline zend_long timestamp_gen()
     return (zend_long)tv.tv_sec * 1000 + tv.tv_usec / 1000; 
 } 
 
-static zend_long snowflake_id(snowflake *sf) 
+static uint64_t snowflake_id(snowflake *sf) 
 {
-    zend_long millisecs = timestamp_gen();
-    zend_long id = 0LL;
-
-    if (millisecs == sf->last_time)
+    uint64_t now = timestamp_gen();
+    if (EXPECTED(now == sf->last_time))
     {
         sf->seq = (sf->seq + 1) & sf->seq_mask;
         if (sf->seq == 0)
         {
-            while (millisecs <= sf->last_time)
+            while (now <= sf->last_time)
             {
-                millisecs = timestamp_gen();
+                now = timestamp_gen();
             }
         }
-    } else if (millisecs > sf->last_time) {
-        sf->seq = 0;
-    } else {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "last_time in the range of 0, %lld, last_time:%lld", millisecs, sf->last_time);
+    }  
+    else if (now > sf->last_time) 
+    {
+        sf->seq = 0LL;
     }
-   
-    id = ((millisecs-sf->epoch) << sf->time_bits) 
-            | (sf->region_id << sf->region_bits) 
-            | (sf->worker_id << sf->worker_bits) 
+    else 
+    {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "last_time in the range of 0, %lld, last_time:%lld", now, sf->last_time);
+    }
+    sf->last_time = now;
+    return ((now-SF_G(epoch)) << sf->time_shift) 
+            | (SF_G(region_id) << sf->region_shift) 
+            | (SF_G(worker_id) << sf->worker_shift) 
             | (sf->seq); 
-
-
-    sf->last_time = millisecs;
-    return id;
 }
 
 static int snowflake_init(snowflake **sf) 
 {
-    int region_id = SF_G(region_id);
-    int max_region_id = (-1L << SF_G(region_bits)) ^ -1L;
-    if(region_id < 0 || region_id > max_region_id){
+    uint8_t region_id = SF_G(region_id);
+    uint8_t max_region_id = (-1L << SF_G(region_bits)) ^ -1L;
+    if (region_id < 0 || region_id > max_region_id)
+    {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Region ID must be in the range : 0-%d", max_region_id);
         return FAILURE;
     }
-    int worker_id = SF_G(worker_id);
-    int max_worker_id = (-1L << SF_G(worker_bits)) ^ -1L;
-    if(worker_id < 0 || worker_id > max_worker_id){
+    
+    uint8_t worker_id = SF_G(worker_id);
+    uint8_t max_worker_id = (-1L << SF_G(worker_bits)) ^ -1L;
+    if (worker_id < 0 || worker_id > max_worker_id)
+    {
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "Worker ID must be in the range: 0-%d", max_worker_id);
         return FAILURE;
     }
 
-    (*sf)->time_bits   = SF_G(region_bits) + SF_G(worker_bits) + SF_G(sequence_bits);
-    (*sf)->region_bits = SF_G(worker_bits) + SF_G(sequence_bits);
-    (*sf)->worker_bits = SF_G(sequence_bits);
+    (*sf)->time_shift   = SF_G(region_bits) + SF_G(worker_bits) + SF_G(sequence_bits);
+    (*sf)->region_shift = SF_G(worker_bits) + SF_G(sequence_bits);
+    (*sf)->worker_shift = SF_G(sequence_bits);
+    (*sf)->seq_mask     = (-1L << SF_G(sequence_bits)) ^ -1L;
 
-    (*sf)->epoch       = SF_G(epoch); 
-    (*sf)->worker_id    = worker_id;
-    (*sf)->region_id    = region_id;
-    (*sf)->seq_mask      = (-1L << SF_G(sequence_bits)) ^ -1L;
-    (*sf)->seq          = 0;
-    (*sf)->last_time    = 0;
     return SUCCESS;
 }
 
@@ -122,12 +149,13 @@ static int snowflake_init(snowflake **sf)
 
 static void php_snowflake_init_globals(zend_snowflake_globals *snowflake_globals)
 {
-   snowflake_globals->region_id     =  SNOWFLAKE_REGION_ID;
-   snowflake_globals->epoch         =  SNOWFLAKE_EPOCH;
-   snowflake_globals->region_bits   =  SNOWFLAKE_REGIONID_BITS;
-   snowflake_globals->worker_bits   =  SNOWFLAKE_WORKERID_BITS;
-   snowflake_globals->sequence_bits =  SNOWFLAKE_SEQUENCE_BITS;
-   snowflake_globals->time_bits     =  SNOWFLAKE_TIME_BITS;
+   snowflake_globals->region_id     =  1;
+   snowflake_globals->worker_id     =  1;
+   snowflake_globals->epoch         =  1576080000000;
+   snowflake_globals->region_bits   =  41;
+   snowflake_globals->worker_bits   =  5;
+   snowflake_globals->sequence_bits =  5;
+   snowflake_globals->time_bits     =  12;
 }
 
 /* }}} */
@@ -135,13 +163,19 @@ static void php_snowflake_init_globals(zend_snowflake_globals *snowflake_globals
 
 PHP_METHOD(snowflake, getId)
 {
-	if (zend_parse_parameters_none() == FAILURE) {
+	if (zend_parse_parameters_none() == FAILURE) 
+    {
 		return;
 	}
+    spinlock(&lock, pid, spin);
     zend_long id = snowflake_id(sf);
-    if (id) {
+    spinlock_unlock(&lock, pid);
+    if (id) 
+    {
         RETURN_LONG(id);
-    } else {
+    } 
+    else 
+    {
         RETURN_BOOL(0);
     }
 }
@@ -165,7 +199,10 @@ PHP_RINIT_FUNCTION(snowflake)
 #if defined(COMPILE_DL_SNOWFLAKE) && defined(ZTS)
 	ZEND_TSRMLS_CACHE_UPDATE();
 #endif
-	snowflake_init(&sf);
+    if (pid == 0) 
+    {
+        pid = (uint32_t)getpid();
+    }
 	return SUCCESS;
 }
 /* }}} */
@@ -228,7 +265,12 @@ PHP_MINIT_FUNCTION(snowflake)
 	INIT_CLASS_ENTRY(snowflake_ce, "snowflake", snowflake_methods); //注册类及类方法
 	REGISTER_INI_ENTRIES();
     zend_register_internal_class(&snowflake_ce);
-	
+
+    if (snowflake_init(&sf) == FAILURE) 
+    {
+        return FAILURE;
+    }
+    ncpu = sysconf(_SC_NPROCESSORS_ONLN);
 	return SUCCESS;
 }
 /* }}} */
