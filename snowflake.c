@@ -28,16 +28,19 @@
 #include "php_snowflake.h"
 #include <sys/time.h>
 #include <sched.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
 
 static uint8_t ncpu = 1;
-static uint8_t lock = 0;
 static uint32_t pid = 0;
 
 /* True global resources - no need for thread safety here */
 static int le_snowflake;
 static snowflake snowf;
-static snowflake *sf = &snowf;
-static unsigned int spin = 2048;
+static sf_shmtx_t *mtx;
+static int shm_id;
+
 zend_class_entry snowflake_ce;
 
 /* {{{ PHP_INI  */
@@ -56,69 +59,44 @@ PHP_INI_END()
 
 /* }}} */
 
-void spinlock(uint8_t *lock, uint32_t pid, uint32_t spin)
-{
-    uint32_t  i, n;
-    for ( ;; ) {
-        if (*lock == 0 && __sync_bool_compare_and_swap(lock, 0, pid)) {
-            return;
-        }
-        if (ncpu > 1) { // ncpu CPU个数
-            for (n = 1; n < spin; n <<= 1) {
-                for (i = 0; i < n; i++) {
-                     __asm__ __volatile__ ("pause");
-                }
-                if (*lock == 0 && __sync_bool_compare_and_swap(lock, 0, pid)) {
-                    return;
-                }
-            }
-        }
-		sched_yield(); // 只旋一个周期，没有获取到锁，退出CPU控制权
-    }
-}
-
-void spinlock_unlock(uint8_t *lock, int pid)
-{
-    __sync_bool_compare_and_swap(lock, pid, 0);
-}
-
-static inline zend_long timestamp_gen()
+static inline uint64_t timestamp_gen()
 {
     struct  timeval    tv;
     gettimeofday(&tv, NULL);
-    return (zend_long)tv.tv_sec * 1000 + tv.tv_usec / 1000; 
+    return ((uint64_t)tv.tv_sec) * 1000 + ((uint64_t)tv.tv_usec) / 1000; 
 } 
 
 static uint64_t snowflake_id(snowflake *sf) 
 {
     uint64_t now = timestamp_gen();
-    if (EXPECTED(now == sf->last_time))
+    
+    if (EXPECTED(now == mtx->last_time))
     {
-        sf->seq = (sf->seq + 1) & sf->seq_mask;
-        if (sf->seq == 0)
+        mtx->seq = (mtx->seq+1) & sf->seq_mask;
+        if (mtx->seq == 0)
         {
-            while (now <= sf->last_time)
+            while (now <= mtx->last_time)
             {
                 now = timestamp_gen();
             }
         }
     }  
-    else if (now > sf->last_time) 
+    else if (now > mtx->last_time) 
     {
-        sf->seq = 0LL;
+        mtx->seq = 0;
     }
     else 
     {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "last_time in the range of 0, %lld, last_time:%lld", now, sf->last_time);
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "last_time in the range of 0, %lld, last_time:%lld", now, mtx->last_time);
     }
-    sf->last_time = now;
+    mtx->last_time = now;
     return ((now-SF_G(epoch)) << sf->time_shift) 
             | (SF_G(region_id) << sf->region_shift) 
             | (SF_G(worker_id) << sf->worker_shift) 
-            | (sf->seq); 
+            | (mtx->seq);
 }
 
-static int snowflake_init(snowflake **sf) 
+static int snowflake_init(snowflake *sf) 
 {
     uint8_t region_id = SF_G(region_id);
     uint8_t max_region_id = (-1L << SF_G(region_bits)) ^ -1L;
@@ -136,26 +114,98 @@ static int snowflake_init(snowflake **sf)
         return FAILURE;
     }
 
-    (*sf)->time_shift   = SF_G(region_bits) + SF_G(worker_bits) + SF_G(sequence_bits);
-    (*sf)->region_shift = SF_G(worker_bits) + SF_G(sequence_bits);
-    (*sf)->worker_shift = SF_G(sequence_bits);
-    (*sf)->seq_mask     = (-1L << SF_G(sequence_bits)) ^ -1L;
+    sf->time_shift   = SF_G(region_bits) + SF_G(worker_bits) + SF_G(sequence_bits);
+    sf->region_shift = SF_G(worker_bits) + SF_G(sequence_bits);
+    sf->worker_shift = SF_G(sequence_bits);
+    sf->seq_mask     = (-1L << SF_G(sequence_bits)) ^ -1L;
 
     return SUCCESS;
 }
+
+static int trylock(sf_shmtx_t *mtx)
+{
+    return (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, pid)); 
+}
+
+static void spinlock(sf_shmtx_t *mtx)
+{
+    uint32_t  i, n;
+    for ( ;; ) {
+        if (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, pid)) {
+            return;
+        }
+        if (ncpu > 1) { // ncpu CPU个数
+            for (n = 1; n < mtx->spin; n <<= 1) {
+                for (i = 0; i < n; i++) {
+                    __asm__ __volatile__ ("pause");
+                }
+                if (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, pid)) {
+                    return;
+                }
+            }
+        }
+        sched_yield(); // 只旋一个周期，没有获取到锁，退出CPU控制权
+    }   
+}
+
+static void spinlock_unlock(sf_shmtx_t *mtx)
+{
+    __sync_bool_compare_and_swap(&(mtx->lock), pid, 0);
+}
+
+static int sf_shmtx_shutdown(sf_shmtx_t **mtx)
+{
+    if ((*mtx)->lock != NULL && (*mtx)->lock != 0) 
+    {
+        spinlock_unlock(*mtx);
+    }
+    shmdt(*mtx);
+    shmctl(shm_id, IPC_RMID, 0) ;
+    
+    return SUCCESS;
+}
+
+static int sf_shmtx_create(sf_shmtx_t **mtx) 
+{
+    shm_id = shmget(IPCKEY , sizeof(sf_shmtx_t), 0640);
+    if (shm_id != -1)
+    {
+        *mtx = (sf_shmtx_t *)shmat(shm_id, NULL, 0);
+        sf_shmtx_shutdown(mtx);
+    } 
+
+    shm_id = shmget(IPCKEY, sizeof(sf_shmtx_t), 0640 | IPC_CREAT | IPC_EXCL);
+    if (shm_id == -1) 
+    {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Init the shared memory[%dB] failed [%d:%s]!", sizeof(sf_shmtx_t), errno, strerror(errno));
+        return FAILURE;
+    } 
+    else
+    {
+        *mtx = (sf_shmtx_t *) shmat(shm_id, NULL, 0);
+    }
+    
+  
+    (*mtx)->lock = 0;
+    (*mtx)->spin = 2048;
+    (*mtx)->last_time = 0;
+    (*mtx)->seq = 0;
+    return SUCCESS;
+}
+
 
 /* {{{ php_snowflake_init_globals
  */
 
 static void php_snowflake_init_globals(zend_snowflake_globals *snowflake_globals)
 {
-   snowflake_globals->region_id     =  1;
-   snowflake_globals->worker_id     =  1;
-   snowflake_globals->epoch         =  1576080000000;
-   snowflake_globals->region_bits   =  41;
-   snowflake_globals->worker_bits   =  5;
-   snowflake_globals->sequence_bits =  5;
-   snowflake_globals->time_bits     =  12;
+   snowflake_globals->region_id     = 1;
+   snowflake_globals->worker_id     = 1;
+   snowflake_globals->epoch         = 1576080000000;
+   snowflake_globals->region_bits   = 41;
+   snowflake_globals->worker_bits   = 5;
+   snowflake_globals->sequence_bits = 5;
+   snowflake_globals->time_bits     = 12;
 }
 
 /* }}} */
@@ -167,9 +217,9 @@ PHP_METHOD(snowflake, getId)
     {
 		return;
 	}
-    spinlock(&lock, pid, spin);
-    zend_long id = snowflake_id(sf);
-    spinlock_unlock(&lock, pid);
+    spinlock(mtx);
+    uint64_t id = snowflake_id(&snowf);
+    spinlock_unlock(mtx);
     if (id) 
     {
         RETURN_LONG(id);
@@ -186,6 +236,8 @@ PHP_METHOD(snowflake, getId)
 PHP_MSHUTDOWN_FUNCTION(snowflake)
 {
 	UNREGISTER_INI_ENTRIES();
+    sf_shmtx_shutdown(&mtx);
+   
 	return SUCCESS;
 }
 /* }}} */
@@ -265,8 +317,12 @@ PHP_MINIT_FUNCTION(snowflake)
 	INIT_CLASS_ENTRY(snowflake_ce, "snowflake", snowflake_methods); //注册类及类方法
 	REGISTER_INI_ENTRIES();
     zend_register_internal_class(&snowflake_ce);
-
-    if (snowflake_init(&sf) == FAILURE) 
+    
+    if (sf_shmtx_create(&mtx) == FAILURE) 
+    {
+        return FAILURE;
+    }
+    if (snowflake_init(&snowf) == FAILURE) 
     {
         return FAILURE;
     }
