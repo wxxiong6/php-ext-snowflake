@@ -38,7 +38,12 @@ extern zend_module_entry snowflake_module_entry;
 #include "TSRM.h"
 #endif
 
+
+#define IPCKEY 0x366378
+
 typedef struct _snowflake_state  snowflake;
+typedef volatile uint32_t sf_atomic_t;
+typedef struct _shmtx  sf_shmtx_t;
 
 ZEND_BEGIN_MODULE_GLOBALS(snowflake)
   uint8_t region_id;
@@ -59,18 +64,26 @@ ZEND_DECLARE_MODULE_GLOBALS(snowflake)
 ZEND_TSRMLS_CACHE_EXTERN()
 #endif
 
+struct _shmtx {  
+  sf_atomic_t  *lock; 
+  sf_atomic_t  spin;
+  sf_atomic_t  seq;
+  uint64_t last_time;
+};
+
 struct _snowflake_state {
     uint8_t time_shift;
     uint8_t region_shift;
     uint8_t worker_shift;
-    uint64_t last_time;
     uint32_t seq_mask;
-    uint32_t seq;
 };
 
-static uint64_t snowflake_id(snowflake *);
-static int snowflake_init(snowflake **);
 
+static int snowflake_init(snowflake *);
+static uint64_t snowflake_id(snowflake *);
+static void spinlock_unlock(sf_shmtx_t *);
+static int trylock(sf_shmtx_t *);
+static void spinlock(sf_shmtx_t *);
 
 #endif	/* PHP_SNOWFLAKE_H */
 
