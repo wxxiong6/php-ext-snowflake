@@ -8,7 +8,7 @@ $start = microtime(true);
 
 $max = 1000000;
 for ($i = 0; $i < $max; $i++) {
-	snowflake::getId();
+	Snowflake::getId();
 }
 
 var_dump(microtime(true)-$start);

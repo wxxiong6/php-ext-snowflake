@@ -1,4 +1,7 @@
-language: php
+git:
+  quiet: true
+dist: bionic
+language: c
 
 compiler:
   - gcc
@@ -29,8 +32,15 @@ before_install:
 
 #Compile
 before_script:
-    - ./travis/compile.sh
+  - ccache --version
+  - ccache --zero-stats
+  - export USE_CCACHE=1
+  # Compile PHP
+  - travis_wait ./travis/compile.sh
 
 # Run PHPs run-tests.php
 script:
-    - ./travis/run-tests.sh
+   - ./travis/run-tests.sh
+
+after_success:
+  - ccache --show-stats

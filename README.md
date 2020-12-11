@@ -3,9 +3,10 @@
 [![Build Status](https://travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake)
 
 - 基于[Twitter SnowFlake](https://github.com/twitter-archive/snowflake "Twitter SnowFlake")分布式ID生成算法,使用c实现的php Extension。
-- 默认生成ID是一个64位long型数字。单机每秒内理论上最多可以生成1024*(2^12)，也就是409.6万个ID(1024 X 4096 = 4194304)。本机测试生成100万个ID,耗时0.24624609947205秒。
+- 默认生成ID是一个64位long型数字。
+- 单机每秒内理论上最多可以生成1024*(2^12)，也就是409.6万个ID(1024 X 4096 = 4194304)。
+- 本机测试生成100万个ID,耗时0.24624609947205秒。
 - 可根据自身情况调整bit位数，从而生成长度合适的ID。
-
 
 |1 标识位|41 时间截(毫秒级)|5 数据中心ID |5 机器ID |12 序列 |
 |:-:|-|-|-|-|
@@ -49,3 +50,10 @@ snowflake.worker_bits = 5
 ;序列 默认值12
 snowflake.sequence_bits = 12
 ```
+
+#php8执行 100W 次耗时（秒）
+/usr/local/php8/bin/php snowflake.php
+float(0.245499849319458)
+#php7.4执行 100W 次耗时（秒）
+/usr/local/php74/bin/php snowflake.php
+double(1.2443881034851)
