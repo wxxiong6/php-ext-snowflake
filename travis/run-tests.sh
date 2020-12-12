@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 TEST_DIR="`pwd`/tests/"
 
 make test
