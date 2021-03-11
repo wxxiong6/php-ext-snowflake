@@ -6,7 +6,7 @@ if(!extension_loaded('snowflake')) {
 }
 $start = microtime(true);
 
-$max = 1000000;
+$max = 1000;
 for ($i = 0; $i < $max; $i++) {
 	Snowflake::getId();
 }

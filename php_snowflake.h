@@ -7,9 +7,7 @@ extern zend_module_entry snowflake_module_entry;
 # define phpext_snowflake_ptr &snowflake_module_entry
 
 # define PHP_SNOWFLAKE_VERSION "0.1.0"
-
-
-
+#define SF_SUPPORT_URL	   "https://github.com/wxxiong6/php-ext-snowflake"
 
 #define IPCKEY 0x366378
 
@@ -17,12 +15,7 @@ typedef struct _snowflake_state  snowflake;
 typedef volatile uint32_t sf_atomic_t;
 typedef struct _shmtx  sf_shmtx_t;
 
-
 extern zend_module_entry test_module_entry;
-
-
-# define PHP_TEST_VERSION "0.1.0"
-
 
 ZEND_BEGIN_MODULE_GLOBALS(snowflake)
 zend_ulong region_id;
@@ -43,9 +36,8 @@ struct _snowflake_state {
 	uint32_t seq_mask;
 };
 
-struct _shmtx {  
-	sf_atomic_t  *lock; 
-	sf_atomic_t  spin;
+struct _shmtx {
+	sf_atomic_t  lock; 
 	sf_atomic_t  seq;
 	uint64_t last_time;
 };

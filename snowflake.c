@@ -14,9 +14,11 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-static uint32_t ncpu = 1;
-static uint32_t pid = 0;
+static uint8_t ncpu = 1U;
+static uint32_t pid = 0U;
+static uint32_t lock = 0U;
 
+static int le_snowflake;
 static snowflake snowf;
 static sf_shmtx_t *mtx;
 static int shm_id;
@@ -38,36 +40,10 @@ static void php_snowflake_init_globals(zend_snowflake_globals *snowflake_globals
 	ZEND_PARSE_PARAMETERS_END()
 #endif
 
-/* {{{ void test1() */
-PHP_FUNCTION(test1)
-{
-	ZEND_PARSE_PARAMETERS_NONE();
-
-	php_printf("The extension %s is loaded and working!\r\n", "snowflake");
-}
-/* }}} */
-
-/* {{{ string test2( [ string $var ] ) */
-PHP_FUNCTION(test2)
-{
-	char *var = "World";
-	size_t var_len = sizeof("World") - 1;
-	zend_string *retval;
-
-	ZEND_PARSE_PARAMETERS_START(0, 1)
-	Z_PARAM_OPTIONAL
-	Z_PARAM_STRING(var, var_len)
-	ZEND_PARSE_PARAMETERS_END();
-
-	retval = strpprintf(0, "Hello %s", var);
-
-	RETURN_STR(retval);
-}
-/* }}}*/
 
 static int trylock(sf_shmtx_t *mtx)
 {
-	return (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, &pid));
+	return (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, pid));
 }
 
 static void spinlock(sf_shmtx_t *mtx)
@@ -75,19 +51,20 @@ static void spinlock(sf_shmtx_t *mtx)
 	uint32_t i, n;
 	for (;;)
 	{
-		if (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, &pid))
+		if (trylock(mtx))
 		{
 			return;
 		}
 		if (ncpu > 1)
 		{ // ncpu CPU个数
-			for (n = 1; n < mtx->spin; n <<= 1)
+			for (n = 1; n < 2048; n <<= 1)
 			{
 				for (i = 0; i < n; i++)
 				{
 					__asm__ __volatile__("pause");
 				}
-				if (mtx->lock == 0 && __sync_bool_compare_and_swap(&(mtx->lock), 0, &pid))
+				
+				if (trylock(mtx))
 				{
 					return;
 				}
@@ -99,45 +76,40 @@ static void spinlock(sf_shmtx_t *mtx)
 
 static void spinlock_unlock(sf_shmtx_t *mtx)
 {
-	__sync_bool_compare_and_swap(&(mtx->lock), &pid, 0);
+	__sync_bool_compare_and_swap(&(mtx->lock), pid, 0);
 }
 
-static int sf_shmtx_shutdown(sf_shmtx_t **mtx)
+static int sf_shmtx_shutdown()
 {
-	if ((*mtx)->lock != NULL && (*mtx)->lock != 0)
+	if (mtx->lock != 0)
 	{
-		spinlock_unlock(*mtx);
+		spinlock_unlock(mtx);
 	}
-	shmdt(*mtx);
+	shmdt(mtx);
 	shmctl(shm_id, IPC_RMID, 0);
-
 	return SUCCESS;
 }
 
-static int sf_shmtx_create(sf_shmtx_t **mtx)
+static int sf_shmtx_create()
 {
-	shm_id = shmget(IPCKEY, sizeof(sf_shmtx_t), 0640);
+	shm_id = shmget(IPCKEY, sizeof(sf_shmtx_t), 0600);
 	if (shm_id != -1)
 	{
-		*mtx = (sf_shmtx_t *)shmat(shm_id, NULL, 0);
-		sf_shmtx_shutdown(mtx);
+		mtx = (sf_shmtx_t *)shmat(shm_id, NULL, 0);
+		sf_shmtx_shutdown();
+		return SUCCESS;
 	}
 
-	shm_id = shmget(IPCKEY, sizeof(sf_shmtx_t), 0640 | IPC_CREAT | IPC_EXCL);
+	shm_id = shmget(IPCKEY, sizeof(sf_shmtx_t),  IPC_CREAT | IPC_EXCL | 0600);
 	if (shm_id == -1)
 	{
 		php_error_docref(NULL, E_WARNING, "Init the shared memory[%lu] failed [%d:%s]!", sizeof(sf_shmtx_t), errno, strerror(errno));
 		return FAILURE;
 	}
-	else
-	{
-		*mtx = (sf_shmtx_t *)shmat(shm_id, NULL, 0);
-	}
-
-	(*mtx)->lock = 0;
-	(*mtx)->spin = 2048;
-	(*mtx)->last_time = 0;
-	(*mtx)->seq = 0;
+	mtx = (sf_shmtx_t *)shmat(shm_id, NULL, 0);
+	mtx->lock = 0U;
+	mtx->last_time = 0ULL;
+	mtx->seq = 0U;
 	return SUCCESS;
 }
 
@@ -198,6 +170,7 @@ static uint64_t snowflake_id(snowflake *sf)
 	}
 	mtx->last_time = now;
 	return ((now - SF_G(epoch)) << sf->time_shift) | (SF_G(region_id) << sf->region_shift) | (SF_G(worker_id) << sf->worker_shift) | (mtx->seq);
+	return now;
 }
 
 PHP_METHOD(snowflake, getId)
@@ -206,9 +179,9 @@ PHP_METHOD(snowflake, getId)
 	{
 		return;
 	}
-	//	spinlock(mtx);
+	spinlock(mtx);
 	uint64_t id = snowflake_id(&snowf);
-	//	spinlock_unlock(mtx);
+	spinlock_unlock(mtx);
 	if (id)
 	{
 		RETURN_LONG(id);
@@ -245,11 +218,31 @@ PHP_RINIT_FUNCTION(snowflake)
 }
 /* }}} */
 
+/* {{{ PHP_RINIT_FUNCTION */
+PHP_RSHUTDOWN_FUNCTION(snowflake)
+{
+#if defined(ZTS) && defined(COMPILE_DL_TEST)
+	ZEND_TSRMLS_CACHE_UPDATE();
+#endif
+return SUCCESS;
+}
+/* }}} */
+
 /* {{{ PHP_MINFO_FUNCTION */
 PHP_MINFO_FUNCTION(snowflake)
 {
 	php_info_print_table_start();
-	php_info_print_table_header(2, "snowflake support", "enabled");
+	php_info_print_table_header(2, "Snowflake support", "enabled");
+	php_info_print_table_row(2, "Snowflake Version", PHP_SNOWFLAKE_VERSION);
+	php_info_print_table_row(2, "Supports", SF_SUPPORT_URL);
+	php_info_print_table_row(2, "worker_id", "1");
+	php_info_print_table_row(2, "region_id", "1");
+	php_info_print_table_row(2, "epoch", "1576080000000");
+	php_info_print_table_row(2, "time_bits", "41");
+	php_info_print_table_row(2, "region_bits", "5");
+	php_info_print_table_row(2, "worker_bits", "5");
+	php_info_print_table_row(2, "sequence_bits", "12");
+
 	php_info_print_table_end();
 }
 /* }}} */
@@ -257,18 +250,18 @@ PHP_MINIT_FUNCTION(snowflake)
 {
 	ZEND_INIT_MODULE_GLOBALS(snowflake, php_snowflake_init_globals, NULL);
 	REGISTER_INI_ENTRIES();
-
 	INIT_CLASS_ENTRY(snowflake_ce, "snowflake", snowflake_methods); //注册类及类方法
-
 	zend_register_internal_class(&snowflake_ce);
-
-	if (sf_shmtx_create(&mtx) == FAILURE)
-	{
-		return FAILURE;
-	}
-	ncpu = sysconf(_SC_NPROCESSORS_ONLN);
-
-	snowflake_init(&snowf);
+	
+	if (sf_shmtx_create() == FAILURE) 
+    {
+        return FAILURE;
+    }
+    if (snowflake_init(&snowf) == FAILURE) 
+    {
+        return FAILURE;
+    }
+    ncpu = sysconf(_SC_NPROCESSORS_ONLN);
 	return SUCCESS;
 }
 
@@ -276,7 +269,7 @@ PHP_MSHUTDOWN_FUNCTION(snowflake)
 {
 	ZEND_INIT_MODULE_GLOBALS(snowflake, php_snowflake_init_globals, NULL);
 	UNREGISTER_INI_ENTRIES();
-
+	sf_shmtx_shutdown();
 	return SUCCESS;
 }
 /* {{{ snowflake_method[]
@@ -293,9 +286,9 @@ zend_module_entry snowflake_module_entry = {
 	PHP_MINIT(snowflake),	  /* PHP_MINIT - Module initialization */
 	PHP_MSHUTDOWN(snowflake), /* PHP_MSHUTDOWN - Module shutdown */
 	PHP_RINIT(snowflake),	  /* PHP_RINIT - Request initialization */
-	NULL,					  /* PHP_RSHUTDOWN - Request shutdown */
+	PHP_RSHUTDOWN(snowflake), /* PHP_RSHUTDOWN - Request shutdown */
 	PHP_MINFO(snowflake),	  /* PHP_MINFO - Module info */
-	PHP_TEST_VERSION,		  /* Version */
+	PHP_SNOWFLAKE_VERSION,		  /* Version */
 	STANDARD_MODULE_PROPERTIES};
 /* }}} */
 
