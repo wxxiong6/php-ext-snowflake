@@ -149,7 +149,11 @@ static uint64_t snowflake_id(snowflake *sf)
 {
 	uint64_t now = timestamp_gen();
 
-	if (EXPECTED(now == mtx->last_time))
+	if (now > mtx->last_time)
+	{
+		mtx->seq = 0;
+	}
+	else if (now == mtx->last_time)
 	{
 		mtx->seq = (mtx->seq + 1) & sf->seq_mask;
 		if (mtx->seq == 0)
@@ -159,10 +163,6 @@ static uint64_t snowflake_id(snowflake *sf)
 				now = timestamp_gen();
 			}
 		}
-	}
-	else if (now > mtx->last_time)
-	{
-		mtx->seq = 0;
 	}
 	else
 	{
