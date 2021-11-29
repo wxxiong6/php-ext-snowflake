@@ -145,6 +145,16 @@ static inline uint64_t timestamp_gen()
 	return ((uint64_t)tv.tv_sec) * (uint64_t)1e3 + ((uint64_t)tv.tv_usec) / (uint64_t)1e3;
 }
 
+
+static uint64_t wait_next_ms(uint64_t lastStamp)
+{
+	uint64_t cur = 0;
+	do {
+		cur = timestamp_gen();
+	} while (cur <= lastStamp);
+	return cur;
+}
+
 static uint64_t snowflake_id(snowflake *sf)
 {
 	uint64_t now = timestamp_gen();
@@ -158,11 +168,11 @@ static uint64_t snowflake_id(snowflake *sf)
 		mtx->seq = (mtx->seq + 1) & sf->seq_mask;
 		if (mtx->seq == 0)
 		{
-			while (now <= mtx->last_time)
-			{
-				now = timestamp_gen();
-			}
+			now = wait_next_ms(now)
 		}
+	} else if (mtx->last_time - now <= 5) { //5ms内的时差
+		mtx->seq = 0;
+		now = wait_next_ms(now)
 	}
 	else
 	{

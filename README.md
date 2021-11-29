@@ -2,6 +2,9 @@
 
 [![Build Status](https://travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake)
 
+网上看过很多php版本的snowflake算法包括c写的扩展，基本上都有问题,php是多进程运行模式。在高发时会产生重复的id。本扩展使用高效的```自旋锁``保证唯一性，也兼顾性能。想要不依赖其他中间件实现分布式唯一id，这个扩展是一个非常不错的选择。
+
+
 - 基于[Twitter SnowFlake](https://github.com/twitter-archive/snowflake "Twitter SnowFlake")分布式ID生成算法,使用c实现的php Extension。
 - 默认生成ID是一个64位long型数字。
 - 单机每秒内理论上最多可以生成1024*(2^12)，也就是409.6万个ID(1024 X 4096 = 4194304)。
