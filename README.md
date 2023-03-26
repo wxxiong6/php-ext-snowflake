@@ -1,6 +1,6 @@
 # php-ext-snowflake
 
-[![Build Status](https://api.travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake) [![Build status](https://ci.appveyor.com/api/projects/status/awii6wf2ocmy202p/branch/master?svg=true)](https://ci.appveyor.com/project/wxxiong6/php-ext-snowflake/branch/master) [![Build Status](https://github.com/laruence/wxxiong6/php-ext-snowflake/integrate/badge.svg?branch=master)](https://github.com/wxxiong6/php-ext-snowflake/actions?query=workflow%3Aintegrate)
+[![Build Status](https://api.travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake) [![Build status](https://ci.appveyor.com/api/projects/status/awii6wf2ocmy202p/branch/master?svg=true)](https://ci.appveyor.com/project/wxxiong6/php-ext-snowflake/branch/master) [![Build Status](https://github.com/wxxiong6/php-ext-snowflake/integrate/badge.svg?branch=master)](https://github.com/wxxiong6/php-ext-snowflake/actions?query=workflow%3Aintegrate)
 
 扩展使用Snowflake算法实现分布式唯一ID生成器的PHP扩展。它可以生成全局唯一且有序的ID。
 
