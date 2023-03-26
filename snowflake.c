@@ -168,11 +168,11 @@ static uint64_t snowflake_id(snowflake *sf)
 		mtx->seq = (mtx->seq + 1) & sf->seq_mask;
 		if (mtx->seq == 0)
 		{
-			now = wait_next_ms(now)
+			now = wait_next_ms(now);
 		}
 	} else if (mtx->last_time - now <= 5) { //5ms内的时差
 		mtx->seq = 0;
-		now = wait_next_ms(now)
+		now = wait_next_ms(now);
 	}
 	else
 	{
