@@ -2,7 +2,14 @@
 
 [![Build Status](https://travis-ci.org/wxxiong6/php-ext-snowflake.svg?branch=master)](https://travis-ci.org/wxxiong6/php-ext-snowflake)
 
-网上看过很多php版本的snowflake算法包括c写的扩展，基本上都有问题,php是多进程运行模式。在高发时会产生重复的id。本扩展使用高效的```自旋锁``保证唯一性，也兼顾性能。想要不依赖其他中间件实现分布式唯一id，这个扩展是一个非常不错的选择。
+扩展使用Snowflake算法实现分布式唯一ID生成器的PHP扩展。它可以生成全局唯一且有序的ID。
+
+PHP多进程环境下确保ID唯一性的确是一个挑战，因为多个进程可能同时尝试生成ID，这可能导致ID重复。在网上看到很多php扩展实现的snowflake都没有解决多进程id重复的问题, 本扩展使用自旋锁确保唯一它可以避免多个进程同时生成ID的情况。
+
+如果您需要在分布式系统中生成唯一ID，而不依赖于其他中间件，本扩展是一种可行的解决方案，因为它可以生成全局唯一的ID，并且不需要依赖其他中间件。
+
+总的来说，使用Snowflake算法实现分布式唯一ID生成器的PHP扩展是一个不错的选择，特别是对于需要在高并发环境下生成ID的应用程序来说。但是请确保正确地配置和使用扩展，并测试其在您的环境中的性能和可靠性。
+
 
 
 - 基于[Twitter SnowFlake](https://github.com/twitter-archive/snowflake "Twitter SnowFlake")分布式ID生成算法,使用c实现的php Extension。
