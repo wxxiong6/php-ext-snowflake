@@ -6,7 +6,7 @@
 extern zend_module_entry snowflake_module_entry;
 # define phpext_snowflake_ptr &snowflake_module_entry
 
-# define PHP_SNOWFLAKE_VERSION "0.1.0"
+# define PHP_SNOWFLAKE_VERSION "1.2"
 #define SF_SUPPORT_URL	   "https://github.com/wxxiong6/php-ext-snowflake"
 
 #define IPCKEY 0x366378
